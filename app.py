@@ -3,10 +3,12 @@ import dash
 from dash import dcc, html, Input, Output, dash_table
 import plotly.express as px
 import pandas as pd
-from flask import Flask
+from flask import Flask, request, session, redirect, url_for
 
 # Create a Flask WSGI-compatible server
 server = Flask(__name__)
+server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Change this to a secure key
+VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
 
 # Attach Dash to the Flask server
 app = dash.Dash(__name__, server=server)
@@ -61,7 +63,22 @@ score_descriptions = {
 }
 
 # Layout
-app.layout = html.Div([
+def check_auth():
+    if "logged_in" not in session:
+        return html.Div([
+            html.H2("Login Required"),
+            dcc.Input(id="password", type="password", placeholder="Enter Password"),
+            html.Button("Submit", id="login-button"),
+            html.Div(id="login-output")
+        ])
+    return app.layout  # Show dashboard if logged in
+
+@server.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect("/")
+
+app.layout = check_auth()
     html.H1("Leadership Scorecard Dashboard"),
     dcc.Dropdown(
         id='company-dropdown',
@@ -117,6 +134,18 @@ def show_details(active_cell):
 
 # Expose the WSGI server for Gunicorn
 server = app.server  # ✅ Ensures Gunicorn recognizes the app
+
+@app.callback(
+    Output("login-output", "children"),
+    Input("login-button", "n_clicks"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def authenticate(n_clicks, password):
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        return redirect(url_for('index'))  # Redirect to the main dashboard
+    return "Incorrect Password. Try Again."
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))  # Runs locally
