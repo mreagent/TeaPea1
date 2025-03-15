@@ -75,7 +75,7 @@ def serve_layout():
         html.Div(id="dynamic-layout")  # Placeholder for login/dashboard content
     ])
 
-app.layout = serve_layout  # ✅ Set static placeholder as default layout
+app.layout = serve_layout()  # ✅ Set static placeholder as default layout
 
 # Callback to dynamically update layout after login
 @app.callback(
@@ -158,4 +158,8 @@ def show_details(active_cell):
     return "Click on a score to view details."
 
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))  # Runs locally
+    print("Starting Dash App...")  # Debugging line
+    try:
+        app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
+    except Exception as e:
+        print(f"Error starting app: {e}")  # Log errors
