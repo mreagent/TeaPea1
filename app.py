@@ -78,7 +78,7 @@ def logout():
     session.pop("logged_in", None)
     return redirect("/")
 
-app.layout = check_auth()
+app.layout = check_auth() not in session else html.Div([
     html.H1("Leadership Scorecard Dashboard"),
     dcc.Dropdown(
         id='company-dropdown',
