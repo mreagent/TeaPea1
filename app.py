@@ -71,36 +71,47 @@ def logout():
 
 # Layout Function with Authentication
 def serve_layout():
-    if "logged_in" not in session:
-        return html.Div([
-            html.H2("Login Required"),
-            dcc.Input(id="password", type="password", placeholder="Enter Password"),
-            html.Button("Submit", id="login-button"),
-            html.Div(id="login-output")
-        ])
-    return html.Div([  
-        html.H1("Leadership Scorecard Dashboard"),
-        dcc.Dropdown(
-            id='company-dropdown',
-            options=[{'label': c, 'value': c} for c in companies],
-            value='Databricks',
-            clearable=False,
-        ),
-        dash_table.DataTable(
-            id='score-table',
-            columns=[
-                {"name": "Category", "id": "Category"},
-                {"name": "Score", "id": "Score"},
-                {"name": "Weight", "id": "Weight"},
-                {"name": "Weighted Score", "id": "Weighted Score"}
-            ],
-            style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left'}
-        ),
-        html.H3("Click a Score for More Details"),
-        dcc.Graph(id='score-chart'),
-        html.Div(id='score-details')
+    return html.Div([
+        html.Div(id="dynamic-layout")  # Placeholder for login/dashboard content
     ])
+
+app.layout = serve_layout  # ✅ Set static placeholder as default layout
+
+# Callback to dynamically update layout after login
+@app.callback(
+    Output("dynamic-layout", "children"),
+    Input("login-button", "n_clicks"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def authenticate(n_clicks, password):
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        return html.Div([  # ✅ Show dashboard only after successful login
+            html.H1("Leadership Scorecard Dashboard"),
+            dcc.Dropdown(
+                id='company-dropdown',
+                options=[{'label': c, 'value': c} for c in companies],
+                value='Databricks',
+                clearable=False,
+            ),
+            dash_table.DataTable(
+                id='score-table',
+                columns=[
+                    {"name": "Category", "id": "Category"},
+                    {"name": "Score", "id": "Score"},
+                    {"name": "Weight", "id": "Weight"},
+                    {"name": "Weighted Score", "id": "Weighted Score"}
+                ],
+                style_table={'overflowX': 'auto'},
+                style_cell={'textAlign': 'left'}
+            ),
+            html.H3("Click a Score for More Details"),
+            dcc.Graph(id='score-chart'),
+            html.Div(id='score-details')
+        ])
+    return "Incorrect Password. Try Again."
+
 
 app.layout = serve_layout  # ✅ Assign function reference, NOT immediate execution
 
