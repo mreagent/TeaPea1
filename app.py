@@ -1,17 +1,18 @@
 import os
 import dash
-from dash import dcc, html, Input, Output, dash_table
+from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
 from flask import Flask, request, session, redirect, url_for
 
 # Create a Flask WSGI-compatible server
 server = Flask(__name__)
-server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Change this to a secure key
+server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
 
 # Attach Dash to the Flask server
 app = dash.Dash(__name__, server=server)
+server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
 # Sample Data - Leadership Scorecard
 categories = [
@@ -62,8 +63,14 @@ score_descriptions = {
     "Market Share Growth": "Measures leadership impact on competitive positioning."
 }
 
-# Layout
-def check_auth():
+# Flask Logout Route
+@server.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("index"))  # ✅ Forces a full reload after logout
+
+# Layout Function with Authentication
+def serve_layout():
     if "logged_in" not in session:
         return html.Div([
             html.H2("Login Required"),
@@ -71,38 +78,46 @@ def check_auth():
             html.Button("Submit", id="login-button"),
             html.Div(id="login-output")
         ])
-    return app.layout  # Show dashboard if logged in
+    return html.Div([  
+        html.H1("Leadership Scorecard Dashboard"),
+        dcc.Dropdown(
+            id='company-dropdown',
+            options=[{'label': c, 'value': c} for c in companies],
+            value='Databricks',
+            clearable=False,
+        ),
+        dash_table.DataTable(
+            id='score-table',
+            columns=[
+                {"name": "Category", "id": "Category"},
+                {"name": "Score", "id": "Score"},
+                {"name": "Weight", "id": "Weight"},
+                {"name": "Weighted Score", "id": "Weighted Score"}
+            ],
+            style_table={'overflowX': 'auto'},
+            style_cell={'textAlign': 'left'}
+        ),
+        html.H3("Click a Score for More Details"),
+        dcc.Graph(id='score-chart'),
+        html.Div(id='score-details')
+    ])
 
-@server.route("/logout")
-def logout():
-    session.pop("logged_in", None)
-    return redirect("/")
+app.layout = serve_layout  # ✅ Assign function reference, NOT immediate execution
 
-app.layout = check_auth() if "logged_in" not in session else html.Div([
-    html.H1("Leadership Scorecard Dashboard"),
-    dcc.Dropdown(
-        id='company-dropdown',
-        options=[{'label': c, 'value': c} for c in companies],
-        value='Databricks',
-        clearable=False,
-    ),
-    dash_table.DataTable(
-        id='score-table',
-        columns=[
-            {"name": "Category", "id": "Category"},
-            {"name": "Score", "id": "Score"},
-            {"name": "Weight", "id": "Weight"},
-            {"name": "Weighted Score", "id": "Weighted Score"}
-        ],
-        style_table={'overflowX': 'auto'},
-        style_cell={'textAlign': 'left'}
-    ),
-    html.H3("Click a Score for More Details"),
-    dcc.Graph(id='score-chart'),
-    html.Div(id='score-details')
-])
+# Authentication Callback
+@app.callback(
+    Output("login-output", "children"),
+    Input("login-button", "n_clicks"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def authenticate(n_clicks, password):
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        return dcc.Location(href="/", id="redirect")  # ✅ Redirects user after login
+    return "Incorrect Password. Try Again."
 
-# Callbacks for interactivity
+# Callbacks for Interactivity
 @app.callback(
     [Output('score-table', 'data'),
      Output('score-chart', 'figure')],
@@ -127,25 +142,9 @@ def show_details(active_cell):
             html.H4(f"{category}"),
             html.P(f"Definition: {score_descriptions[category]}"),
             html.P(f"Score Assigned: {score}"),
-            html.P(f"Weight Applied: {weight * 100}%"),
-            html.P("Rationale: This score was determined based on tenure, impact on company strategy, and performance benchmarks.")
+            html.P(f"Weight Applied: {weight * 100}%")
         ])
     return "Click on a score to view details."
-
-# Expose the WSGI server for Gunicorn
-server = app.server  # ✅ Ensures Gunicorn recognizes the app
-
-@app.callback(
-    Output("login-output", "children"),
-    Input("login-button", "n_clicks"),
-    State("password", "value"),
-    prevent_initial_call=True
-)
-def authenticate(n_clicks, password):
-    if password == VALID_PASSWORD:
-        session["logged_in"] = True
-        return redirect(url_for('index'))  # Redirect to the main dashboard
-    return "Incorrect Password. Try Again."
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))  # Runs locally
