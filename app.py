@@ -1,10 +1,15 @@
+import os
 import dash
 from dash import dcc, html, Input, Output, dash_table
 import plotly.express as px
 import pandas as pd
+from flask import Flask
 
-# Initialize the Dash app
-app = dash.Dash(__name__)
+# Create a Flask WSGI-compatible server
+server = Flask(__name__)
+
+# Attach Dash to the Flask server
+app = dash.Dash(__name__, server=server)
 
 # Sample Data - Leadership Scorecard
 categories = [
@@ -110,8 +115,9 @@ def show_details(active_cell):
         ])
     return "Click on a score to view details."
 
-# Run the app
-server = app.server  # Gunicorn requires a WSGI-compatible app object
+# Ensure Gunicorn recognizes the app
+if __name__ != "__main__":
+    server = app.server  # Expose the Flask server to Gunicorn
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
