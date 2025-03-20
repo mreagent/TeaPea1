@@ -9,7 +9,13 @@ from flask_session import Session  # ✅ Enables server-side session storage
 # ✅ Initialize Flask Server
 server = Flask(__name__)
 server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
-server.config["SESSION_TYPE"] = "filesystem"  # ✅ Stores session data on the server
+
+# ✅ Fix for Flask 3.0: Explicitly define session cookie name
+server.config["SESSION_TYPE"] = "filesystem"
+server.config["SESSION_PERMANENT"] = False
+server.config["SESSION_USE_SIGNER"] = True
+server.config["SESSION_COOKIE_NAME"] = "session"  # ✅ Fixes session error
+
 Session(server)  # ✅ Initialize Flask-Session
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
