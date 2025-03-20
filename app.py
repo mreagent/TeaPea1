@@ -6,24 +6,27 @@ import pandas as pd
 from flask import Flask, request, session, redirect, url_for
 from flask_session import Session  # ✅ Enables server-side session storage
 
-# ✅ Create a Flask WSGI-compatible server
+# ✅ Initialize Flask Server
 server = Flask(__name__)
-server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
+server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
 server.config["SESSION_TYPE"] = "filesystem"  # ✅ Stores session data on the server
 Session(server)  # ✅ Initialize Flask-Session
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
 
-# ✅ Attach Dash to the Flask server
+# ✅ Initialize Dash
 app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True)
 server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
-# ✅ Sample Data - Leadership Scorecard
-categories = [
-    "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence", 
-    "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions", 
-    "Product & R&D Investment", "Acquisitions & Partnerships", "Market Share Growth"
-]
+# ✅ Debugging Log - Checking Render Environment
+print("🟢 App is starting...")
+print(f"🛠 SECRET_KEY Loaded: {bool(server.config['SECRET_KEY'])}")
+print(f"🛠 Session Config: {server.config['SESSION_TYPE']}")
+
+# ✅ Sample Data
+categories = ["CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence",
+              "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions",
+              "Product & R&D Investment", "Acquisitions & Partnerships", "Market Share Growth"]
 
 companies = ["Databricks", "Snowflake", "Palantir"]
 
@@ -53,24 +56,13 @@ for company, score_list in scores.items():
 
 df = pd.DataFrame(data)
 
-# ✅ Define score descriptions
-score_descriptions = {
-    "CEO Tenure & Impact": "Measures how a long-tenured CEO influences stability, strategy, and performance.",
-    "Executive Turnover Rate": "Evaluates the frequency of executive changes and its impact on continuity.",
-    "Internal vs. External Hires": "Analyzes whether leadership changes come from within or outside the company.",
-    "Founder Presence": "Assesses whether founders remain involved and their influence on company direction.",
-    "Headcount Efficiency": "Measures revenue per employee to determine efficient scaling.",
-    "New Role Creation": "Examines the introduction of new executive roles and strategic priorities.",
-    "Department Growth vs. Market Conditions": "Tracks hiring growth compared to market demand.",
-    "Product & R&D Investment": "Evaluates investment in innovation and new product development.",
-    "Acquisitions & Partnerships": "Analyzes strategic deals for expansion.",
-    "Market Share Growth": "Measures leadership impact on competitive positioning."
-}
+# ✅ Debugging Log - Confirming Data Loaded
+print("✅ Leadership Score Data Loaded")
 
 # ✅ Flask Routes for Authentication
 @server.route("/")
 def home():
-    """Renders login page if not logged in, otherwise redirects to dashboard."""
+    print("🛠 Loading Home Page")  # ✅ Debugging Log
     if not session.get("logged_in"):
         return """
         <html>
@@ -84,33 +76,34 @@ def home():
         </body>
         </html>
         """
-    return redirect("/dashboard")  # ✅ Redirect to dashboard if logged in
+    return redirect("/dashboard")
 
 @server.route("/login", methods=["POST"])
 def login():
-    """Handles login authentication and sets session."""
+    print("🛠 Processing Login")  # ✅ Debugging Log
     password = request.form.get("password")
     if password == VALID_PASSWORD:
         session["logged_in"] = True
-        return redirect("/dashboard")  # ✅ Redirect to dashboard
-    return redirect("/")  # ✅ Redirect back to login page on failure
+        print("🟢 Login Successful")  # ✅ Debugging Log
+        return redirect("/dashboard")
+    print("🔴 Incorrect Password")  # ✅ Debugging Log
+    return redirect("/")
 
 @server.route("/logout")
 def logout():
-    """Handles user logout and clears session."""
     session.pop("logged_in", None)
-    return redirect("/")  # ✅ Redirect to login page
+    print("🟢 Logged Out")  # ✅ Debugging Log
+    return redirect("/")
 
 @server.route("/dashboard")
 def dashboard():
-    """Serves the dashboard layout if authenticated, otherwise redirects to login."""
+    print("🛠 Loading Dashboard")  # ✅ Debugging Log
     if not session.get("logged_in"):
         return redirect("/")
     return app.index()
 
-# ✅ Dash Layout (Only assigned if user is authenticated)
+# ✅ Dash Layout
 def serve_layout():
-    """Returns the Dash layout for authenticated users."""
     return html.Div([  
         html.H1("Leadership Scorecard Dashboard"),
         dcc.Dropdown(
@@ -135,16 +128,18 @@ def serve_layout():
         html.Div(id='score-details')
     ])
 
-app.layout = serve_layout  # ✅ Assign function reference
+app.layout = serve_layout
 
-# ✅ Callbacks for Interactivity
+# ✅ Debugging Log - Dash Layout Set
+print("✅ Dash Layout Loaded")
+
+# ✅ Dash Callbacks
 @app.callback(
     [Output('score-table', 'data'),
      Output('score-chart', 'figure')],
     [Input('company-dropdown', 'value')]
 )
 def update_table(company):
-    """Updates table and chart based on selected company."""
     filtered_df = df[df["Company"] == company]
     fig = px.bar(filtered_df, x='Category', y='Score', title=f'{company} Leadership Scores')
     return filtered_df.to_dict('records'), fig
@@ -154,7 +149,6 @@ def update_table(company):
     [Input('score-table', 'active_cell')]
 )
 def show_details(active_cell):
-    """Shows details of selected score category."""
     if active_cell:
         row = active_cell['row']
         category = df.iloc[row]['Category']
@@ -169,8 +163,8 @@ def show_details(active_cell):
     return "Click on a score to view details."
 
 if __name__ == "__main__":
-    print("Starting Dash App...")  # Debugging line
+    print("🟢 Starting Dash App...")  # ✅ Debugging Log
     try:
         app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
     except Exception as e:
-        print(f"Error starting app: {e}")  # Log errors
+        print(f"🔴 Error starting app: {e}")  # ✅ Log Errors
