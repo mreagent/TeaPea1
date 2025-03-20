@@ -10,11 +10,11 @@ from flask_session import Session  # ✅ Enables server-side session storage
 server = Flask(__name__)
 server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
 
-# ✅ Fix for Flask 3.0: Explicitly define session cookie name
+# ✅ Fix Flask-Session Issue
 server.config["SESSION_TYPE"] = "filesystem"
 server.config["SESSION_PERMANENT"] = False
 server.config["SESSION_USE_SIGNER"] = True
-server.config["SESSION_COOKIE_NAME"] = "session"  # ✅ Fixes session error
+server.config["SESSION_FILE_DIR"] = "/tmp/flask_session"  # ✅ Set session storage directory
 
 Session(server)  # ✅ Initialize Flask-Session
 
