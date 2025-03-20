@@ -4,11 +4,17 @@ from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
 from flask import Flask, request, session, redirect, url_for
+from flask_session import Session  # ✅ NEW: Enables server-side session storage
 
 # Create a Flask WSGI-compatible server
 server = Flask(__name__)
 server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
+
+# ✅ NEW: Configure server-side session storage (so Flask session persists)
+server.config["SESSION_TYPE"] = "filesystem"
+server.config["SESSION_PERMANENT"] = False
+Session(server)  # Initialize Flask-Session
 
 # Attach Dash to the Flask server
 app = dash.Dash(__name__, server=server)
@@ -71,31 +77,31 @@ def logout():
 
 # Layout Function with Authentication
 def serve_layout():
-    with server.test_request_context():  # ✅ Fix: Ensure Flask request context
-        if session.get("logged_in", False):  
-            return html.Div([  
-                html.H1("Leadership Scorecard Dashboard"),
-                dcc.Dropdown(
-                    id='company-dropdown',
-                    options=[{'label': c, 'value': c} for c in companies],
-                    value='Databricks',
-                    clearable=False,
-                ),
-                dash_table.DataTable(
-                    id='score-table',
-                    columns=[
-                        {"name": "Category", "id": "Category"},
-                        {"name": "Score", "id": "Score"},
-                        {"name": "Weight", "id": "Weight"},
-                        {"name": "Weighted Score", "id": "Weighted Score"}
-                    ],
-                    style_table={'overflowX': 'auto'},
-                    style_cell={'textAlign': 'left'}
-                ),
-                html.H3("Click a Score for More Details"),
-                dcc.Graph(id='score-chart'),
-                html.Div(id='score-details')
-            ])
+    """Dynamically serve layout based on login state."""
+    if session.get("logged_in"):
+        return html.Div([  
+            html.H1("Leadership Scorecard Dashboard"),
+            dcc.Dropdown(
+                id='company-dropdown',
+                options=[{'label': c, 'value': c} for c in companies],
+                value='Databricks',
+                clearable=False,
+            ),
+            dash_table.DataTable(
+                id='score-table',
+                columns=[
+                    {"name": "Category", "id": "Category"},
+                    {"name": "Score", "id": "Score"},
+                    {"name": "Weight", "id": "Weight"},
+                    {"name": "Weighted Score", "id": "Weighted Score"}
+                ],
+                style_table={'overflowX': 'auto'},
+                style_cell={'textAlign': 'left'}
+            ),
+            html.H3("Click a Score for More Details"),
+            dcc.Graph(id='score-chart'),
+            html.Div(id='score-details')
+        ])
     return html.Div([
         html.H2("Login Required"),
         dcc.Input(id="password", type="password", placeholder="Enter Password"),
@@ -105,6 +111,11 @@ def serve_layout():
 
 app.layout = serve_layout  # ✅ Fixed: Assign function reference
 
+# ✅ NEW: Flask Route for Dashboard (Prevents session loss)
+@server.route("/")
+def index():
+    return app.index()
+
 # Authentication Callback
 @app.callback(
     Output("login-output", "children"),
@@ -113,11 +124,10 @@ app.layout = serve_layout  # ✅ Fixed: Assign function reference
     prevent_initial_call=True
 )
 def authenticate(n_clicks, password):
-    """Handle user authentication and session."""
-    with server.test_request_context():  # ✅ Fix: Ensure Flask request context
-        if password == VALID_PASSWORD:
-            session["logged_in"] = True
-            return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
+    """Handle user authentication and session persistence."""
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
     return "Incorrect Password. Try Again."
 
 # Callbacks for Interactivity
