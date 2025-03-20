@@ -71,31 +71,31 @@ def logout():
 
 # Layout Function with Authentication
 def serve_layout():
-    """Dynamically serve login or dashboard layout based on session."""
-    if session.get("logged_in", False):  # ✅ Fix: Use .get() to prevent KeyErrors
-        return html.Div([  # ✅ Show dashboard if already logged in
-            html.H1("Leadership Scorecard Dashboard"),
-            dcc.Dropdown(
-                id='company-dropdown',
-                options=[{'label': c, 'value': c} for c in companies],
-                value='Databricks',
-                clearable=False,
-            ),
-            dash_table.DataTable(
-                id='score-table',
-                columns=[
-                    {"name": "Category", "id": "Category"},
-                    {"name": "Score", "id": "Score"},
-                    {"name": "Weight", "id": "Weight"},
-                    {"name": "Weighted Score", "id": "Weighted Score"}
-                ],
-                style_table={'overflowX': 'auto'},
-                style_cell={'textAlign': 'left'}
-            ),
-            html.H3("Click a Score for More Details"),
-            dcc.Graph(id='score-chart'),
-            html.Div(id='score-details')
-        ])
+    with server.test_request_context():  # ✅ Fix: Ensure Flask request context
+        if session.get("logged_in", False):  
+            return html.Div([  
+                html.H1("Leadership Scorecard Dashboard"),
+                dcc.Dropdown(
+                    id='company-dropdown',
+                    options=[{'label': c, 'value': c} for c in companies],
+                    value='Databricks',
+                    clearable=False,
+                ),
+                dash_table.DataTable(
+                    id='score-table',
+                    columns=[
+                        {"name": "Category", "id": "Category"},
+                        {"name": "Score", "id": "Score"},
+                        {"name": "Weight", "id": "Weight"},
+                        {"name": "Weighted Score", "id": "Weighted Score"}
+                    ],
+                    style_table={'overflowX': 'auto'},
+                    style_cell={'textAlign': 'left'}
+                ),
+                html.H3("Click a Score for More Details"),
+                dcc.Graph(id='score-chart'),
+                html.Div(id='score-details')
+            ])
     return html.Div([
         html.H2("Login Required"),
         dcc.Input(id="password", type="password", placeholder="Enter Password"),
@@ -114,9 +114,10 @@ app.layout = serve_layout  # ✅ Fixed: Assign function reference
 )
 def authenticate(n_clicks, password):
     """Handle user authentication and session."""
-    if password == VALID_PASSWORD:
-        session["logged_in"] = True
-        return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
+    with server.test_request_context():  # ✅ Fix: Ensure Flask request context
+        if password == VALID_PASSWORD:
+            session["logged_in"] = True
+            return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
     return "Incorrect Password. Try Again."
 
 # Callbacks for Interactivity
