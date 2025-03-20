@@ -4,9 +4,9 @@ from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
 from flask import Flask, request, session, redirect, url_for
-from flask_session import Session  # ✅ NEW: Enables server-side session storage
+from flask_session import Session  # ✅ Enables server-side session storage
 
-# Create a Flask WSGI-compatible server
+# ✅ Create a Flask WSGI-compatible server
 server = Flask(__name__)
 server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
 server.config["SESSION_TYPE"] = "filesystem"  # ✅ Stores session data on the server
@@ -14,11 +14,11 @@ Session(server)  # ✅ Initialize Flask-Session
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
 
-# Attach Dash to the Flask server
-app = dash.Dash(__name__, server=server)
+# ✅ Attach Dash to the Flask server
+app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True)
 server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
-# Sample Data - Leadership Scorecard
+# ✅ Sample Data - Leadership Scorecard
 categories = [
     "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence", 
     "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions", 
@@ -53,7 +53,7 @@ for company, score_list in scores.items():
 
 df = pd.DataFrame(data)
 
-# Define score descriptions
+# ✅ Define score descriptions
 score_descriptions = {
     "CEO Tenure & Impact": "Measures how a long-tenured CEO influences stability, strategy, and performance.",
     "Executive Turnover Rate": "Evaluates the frequency of executive changes and its impact on continuity.",
@@ -67,24 +67,51 @@ score_descriptions = {
     "Market Share Growth": "Measures leadership impact on competitive positioning."
 }
 
-# Flask Logout Route
+# ✅ Flask Routes for Authentication
+@server.route("/")
+def home():
+    """Renders login page if not logged in, otherwise redirects to dashboard."""
+    if not session.get("logged_in"):
+        return """
+        <html>
+        <head><title>Login</title></head>
+        <body>
+        <h2>Login Required</h2>
+        <form action="/login" method="post">
+            <input type="password" name="password" placeholder="Enter Password">
+            <button type="submit">Submit</button>
+        </form>
+        </body>
+        </html>
+        """
+    return redirect("/dashboard")  # ✅ Redirect to dashboard if logged in
+
+@server.route("/login", methods=["POST"])
+def login():
+    """Handles login authentication and sets session."""
+    password = request.form.get("password")
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        return redirect("/dashboard")  # ✅ Redirect to dashboard
+    return redirect("/")  # ✅ Redirect back to login page on failure
+
 @server.route("/logout")
 def logout():
+    """Handles user logout and clears session."""
     session.pop("logged_in", None)
-    return redirect(url_for("index"))  # ✅ Forces a full reload after logout
+    return redirect("/")  # ✅ Redirect to login page
 
-# Layout Function with Authentication
-def serve_layout():
-    """Serve the layout dynamically inside a request context."""
+@server.route("/dashboard")
+def dashboard():
+    """Serves the dashboard layout if authenticated, otherwise redirects to login."""
     if not session.get("logged_in"):
-        return html.Div([
-            html.H2("Login Required"),
-            dcc.Input(id="password", type="password", placeholder="Enter Password"),
-            html.Button("Submit", id="login-button"),
-            html.Div(id="login-output")
-        ])
-    
-    return html.Div([  # ✅ Show dashboard only after successful login
+        return redirect("/")
+    return app.index()
+
+# ✅ Dash Layout (Only assigned if user is authenticated)
+def serve_layout():
+    """Returns the Dash layout for authenticated users."""
+    return html.Div([  
         html.H1("Leadership Scorecard Dashboard"),
         dcc.Dropdown(
             id='company-dropdown',
@@ -108,23 +135,9 @@ def serve_layout():
         html.Div(id='score-details')
     ])
 
-app.layout = serve_layout  # ✅ Assign function reference, NOT immediate execution
+app.layout = serve_layout  # ✅ Assign function reference
 
-# Authentication Callback
-@app.callback(
-    Output("login-output", "children"),
-    Input("login-button", "n_clicks"),
-    State("password", "value"),
-    prevent_initial_call=True
-)
-def authenticate(n_clicks, password):
-    """Handles login authentication."""
-    if password == VALID_PASSWORD:
-        session["logged_in"] = True
-        return dcc.Location(href="/", id="redirect")  # ✅ Redirects user after login
-    return "Incorrect Password. Try Again."
-
-# Callbacks for Interactivity
+# ✅ Callbacks for Interactivity
 @app.callback(
     [Output('score-table', 'data'),
      Output('score-chart', 'figure')],
