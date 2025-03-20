@@ -1,169 +1,128 @@
 import os
 import dash
-from dash import dcc, html, Input, Output, State, dash_table
-import plotly.express as px
+from dash import dcc, html, dash_table, Input, Output
 import pandas as pd
-from flask import Flask, request, session, redirect, url_for, make_response
+import plotly.express as px
+from flask import Flask, request, Response
 
-# ✅ Initialize Flask Server
+# 🚀 Flask Server for Authentication
 server = Flask(__name__)
-server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
 
-VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
+# ✅ Set Username and Password for Basic Authentication
+USERNAME = os.getenv("DASH_USERNAME", "admin")  # Default: admin
+PASSWORD = os.getenv("DASH_PASSWORD", "password")  # Default: password
 
-# ✅ Initialize Dash
-app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True)
-server = app.server  # ✅ Ensures Gunicorn recognizes the app
+# ✅ Authentication Function
+def authenticate():
+    auth = request.authorization
+    if not auth or auth.username != USERNAME or auth.password != PASSWORD:
+        return Response(
+            "Login Required", 401,
+            {"WWW-Authenticate": 'Basic realm="Login Required"'}
+        )
 
-# ✅ Debugging Log - Checking Render Environment
-print("🟢 App is starting...")
-print(f"🛠 SECRET_KEY Loaded: {bool(server.config['SECRET_KEY'])}")
+@server.before_request
+def require_auth():
+    if request.path.startswith("/_dash"):  # Protects only Dash routes
+        auth_response = authenticate()
+        if auth_response:
+            return auth_response
 
-# ✅ Sample Data
-categories = ["CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence",
-              "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions",
-              "Product & R&D Investment", "Acquisitions & Partnerships", "Market Share Growth"]
+# ✅ Initialize Dash App
+app = dash.Dash(__name__, server=server)
 
-companies = ["Databricks", "Snowflake", "Palantir"]
+# ✅ Sample Leadership Score Data
+df = pd.DataFrame({
+    "Category": [
+        "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires",
+        "Founder Presence", "Headcount Efficiency", "New Role Creation",
+        "Department Growth vs. Market Conditions", "Product & R&D Investment",
+        "Acquisitions & Partnerships", "Market Share Growth"
+    ],
+    "Score": [9, 8, 7, 10, 8, 9, 7, 9, 8, 9],
+    "Weight": [0.15, 0.1, 0.1, 0.05, 0.15, 0.1, 0.1, 0.1, 0.1, 0.05]
+})
 
-scores = {
-    "Databricks": [9, 8, 7, 10, 8, 9, 7, 9, 8, 9],
-    "Snowflake": [7, 6, 7, 5, 9, 9, 8, 9, 9, 8],
-    "Palantir": [10, 9, 6, 10, 7, 6, 7, 8, 7, 7]
+df["Weighted Score"] = df["Score"] * df["Weight"]
+
+# ✅ Define Score Descriptions
+score_descriptions = {
+    "CEO Tenure & Impact": "Measures the influence of the CEO's tenure on company stability and growth.",
+    "Executive Turnover Rate": "Tracks the frequency of executive departures, indicating leadership stability.",
+    "Internal vs. External Hires": "Compares internal promotions to external hires, reflecting leadership development.",
+    "Founder Presence": "Assesses whether the founder remains actively involved in company leadership.",
+    "Headcount Efficiency": "Measures revenue per employee, assessing workforce efficiency.",
+    "New Role Creation": "Evaluates the rate of new roles being introduced in the organization.",
+    "Department Growth vs. Market Conditions": "Compares department expansion relative to industry growth trends.",
+    "Product & R&D Investment": "Analyzes spending on research and development for innovation and competitiveness.",
+    "Acquisitions & Partnerships": "Evaluates strategic acquisitions and partnerships contributing to market expansion.",
+    "Market Share Growth": "Measures the company’s ability to expand its market presence over time."
 }
-
-weights = {
-    "CEO Tenure & Impact": 0.15, "Executive Turnover Rate": 0.10, "Internal vs. External Hires": 0.10,
-    "Founder Presence": 0.05, "Headcount Efficiency": 0.15, "New Role Creation": 0.10,
-    "Department Growth vs. Market Conditions": 0.10, "Product & R&D Investment": 0.10,
-    "Acquisitions & Partnerships": 0.10, "Market Share Growth": 0.05
-}
-
-data = []
-for company, score_list in scores.items():
-    for i, category in enumerate(categories):
-        data.append({
-            "Company": company,
-            "Category": category,
-            "Score": score_list[i],
-            "Weight": weights[category],
-            "Weighted Score": round(score_list[i] * weights[category], 2)
-        })
-
-df = pd.DataFrame(data)
-
-# ✅ Debugging Log - Confirming Data Loaded
-print("✅ Leadership Score Data Loaded")
-
-# ✅ Flask Routes for Authentication
-@server.route("/")
-def home():
-    print("🛠 Loading Home Page")  # ✅ Debugging Log
-    if request.cookies.get("logged_in") == "true":
-        return redirect("/dashboard")
-
-    return """
-    <html>
-    <head><title>Login</title></head>
-    <body>
-    <h2>Login Required</h2>
-    <form action="/login" method="post">
-        <input type="password" name="password" placeholder="Enter Password">
-        <button type="submit">Submit</button>
-    </form>
-    </body>
-    </html>
-    """
-
-@server.route("/login", methods=["POST"])
-def login():
-    print("🛠 Processing Login")  # ✅ Debugging Log
-    password = request.form.get("password")
-    if password == VALID_PASSWORD:
-        response = make_response(redirect("/dashboard"))
-        response.set_cookie("logged_in", "true", max_age=3600)  # ✅ Store login in cookies
-        print("🟢 Login Successful")  # ✅ Debugging Log
-        return response
-    print("🔴 Incorrect Password")  # ✅ Debugging Log
-    return redirect("/")
-
-@server.route("/logout")
-def logout():
-    response = make_response(redirect("/"))
-    response.set_cookie("logged_in", "", expires=0)  # ✅ Clear login cookie
-    print("🟢 Logged Out")  # ✅ Debugging Log
-    return response
-
-@server.route("/dashboard")
-def dashboard():
-    print("🛠 Loading Dashboard")  # ✅ Debugging Log
-    if request.cookies.get("logged_in") != "true":
-        return redirect("/")
-    return app.index()
 
 # ✅ Dash Layout
-def serve_layout():
-    return html.Div([  
-        html.H1("Leadership Scorecard Dashboard"),
-        dcc.Dropdown(
-            id='company-dropdown',
-            options=[{'label': c, 'value': c} for c in companies],
-            value='Databricks',
-            clearable=False,
-        ),
-        dash_table.DataTable(
-            id='score-table',
-            columns=[
-                {"name": "Category", "id": "Category"},
-                {"name": "Score", "id": "Score"},
-                {"name": "Weight", "id": "Weight"},
-                {"name": "Weighted Score", "id": "Weighted Score"}
-            ],
-            style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left'}
-        ),
-        html.H3("Click a Score for More Details"),
-        dcc.Graph(id='score-chart'),
-        html.Div(id='score-details')
-    ])
+app.layout = html.Div([
+    html.H1("Leadership Scorecard Dashboard"),
 
-app.layout = serve_layout
+    # Dropdown to Select a Company (Future Feature)
+    dcc.Dropdown(
+        id="company-dropdown",
+        options=[{"label": "Databricks", "value": "Databricks"}],
+        value="Databricks"
+    ),
 
-# ✅ Debugging Log - Dash Layout Set
-print("✅ Dash Layout Loaded")
+    # Leadership Score Table
+    dash_table.DataTable(
+        id="score-table",
+        columns=[
+            {"name": "Category", "id": "Category"},
+            {"name": "Score", "id": "Score"},
+            {"name": "Weight", "id": "Weight"},
+            {"name": "Weighted Score", "id": "Weighted Score"}
+        ],
+        data=df.to_dict("records"),
+        style_data_conditional=[
+            {"if": {"column_id": "Weighted Score", "filter_query": "{Weighted Score} < 1"},
+             "backgroundColor": "#FFDDDD", "color": "black"}
+        ]
+    ),
 
-# ✅ Dash Callbacks
+    html.H3("Click a Score for More Details"),
+    html.Div(id="score-details"),
+
+    # Score Bar Chart
+    dcc.Graph(id="score-chart"),
+])
+
+# ✅ Callback: Show Score Details When Clicked
 @app.callback(
-    [Output('score-table', 'data'),
-     Output('score-chart', 'figure')],
-    [Input('company-dropdown', 'value')]
-)
-def update_table(company):
-    filtered_df = df[df["Company"] == company]
-    fig = px.bar(filtered_df, x='Category', y='Score', title=f'{company} Leadership Scores')
-    return filtered_df.to_dict('records'), fig
-
-@app.callback(
-    Output('score-details', 'children'),
-    [Input('score-table', 'active_cell')]
+    Output("score-details", "children"),
+    [Input("score-table", "active_cell")]
 )
 def show_details(active_cell):
     if active_cell:
-        row = active_cell['row']
-        category = df.iloc[row]['Category']
-        score = df.iloc[row]['Score']
-        weight = df.iloc[row]['Weight']
+        row = active_cell["row"]
+        category = df.iloc[row]["Category"]
+        score = df.iloc[row]["Score"]
+        weight = df.iloc[row]["Weight"]
+        description = score_descriptions.get(category, "No description available.")
+
         return html.Div([
             html.H4(f"{category}"),
-            html.P(f"Definition: {score_descriptions[category]}"),
+            html.P(f"Definition: {description}"),
             html.P(f"Score Assigned: {score}"),
             html.P(f"Weight Applied: {weight * 100}%")
         ])
     return "Click on a score to view details."
 
+# ✅ Callback: Update Chart Based on Selected Company
+@app.callback(
+    Output("score-chart", "figure"),
+    [Input("company-dropdown", "value")]
+)
+def update_chart(selected_company):
+    fig = px.bar(df, x="Category", y="Score", title=f"{selected_company} Leadership Scores")
+    return fig
+
+# ✅ Run App
 if __name__ == "__main__":
-    print("🟢 Starting Dash App...")  # ✅ Debugging Log
-    try:
-        app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
-    except Exception as e:
-        print(f"🔴 Error starting app: {e}")  # ✅ Log Errors
+    app.run_server(debug=True)
