@@ -71,23 +71,9 @@ def logout():
 
 # Layout Function with Authentication
 def serve_layout():
-    return html.Div([
-        html.Div(id="dynamic-layout")  # Placeholder for login/dashboard content
-    ])
-
-app.layout = serve_layout()  # ✅ Set static placeholder as default layout
-
-# Callback to dynamically update layout after login
-@app.callback(
-    Output("dynamic-layout", "children"),
-    Input("login-button", "n_clicks"),
-    State("password", "value"),
-    prevent_initial_call=True
-)
-def authenticate(n_clicks, password):
-    if password == VALID_PASSWORD:
-        session["logged_in"] = True
-        return html.Div([  # ✅ Show dashboard only after successful login
+    """Dynamically serve login or dashboard layout based on session."""
+    if session.get("logged_in", False):  # ✅ Fix: Use .get() to prevent KeyErrors
+        return html.Div([  # ✅ Show dashboard if already logged in
             html.H1("Leadership Scorecard Dashboard"),
             dcc.Dropdown(
                 id='company-dropdown',
@@ -110,10 +96,14 @@ def authenticate(n_clicks, password):
             dcc.Graph(id='score-chart'),
             html.Div(id='score-details')
         ])
-    return "Incorrect Password. Try Again."
+    return html.Div([
+        html.H2("Login Required"),
+        dcc.Input(id="password", type="password", placeholder="Enter Password"),
+        html.Button("Submit", id="login-button"),
+        html.Div(id="login-output")
+    ])
 
-
-app.layout = serve_layout  # ✅ Assign function reference, NOT immediate execution
+app.layout = serve_layout  # ✅ Fixed: Assign function reference
 
 # Authentication Callback
 @app.callback(
@@ -123,9 +113,10 @@ app.layout = serve_layout  # ✅ Assign function reference, NOT immediate execut
     prevent_initial_call=True
 )
 def authenticate(n_clicks, password):
+    """Handle user authentication and session."""
     if password == VALID_PASSWORD:
         session["logged_in"] = True
-        return dcc.Location(href="/", id="redirect")  # ✅ Redirects user after login
+        return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
     return "Incorrect Password. Try Again."
 
 # Callbacks for Interactivity
@@ -135,6 +126,7 @@ def authenticate(n_clicks, password):
     [Input('company-dropdown', 'value')]
 )
 def update_table(company):
+    """Update the table and chart based on selected company."""
     filtered_df = df[df["Company"] == company]
     fig = px.bar(filtered_df, x='Category', y='Score', title=f'{company} Leadership Scores')
     return filtered_df.to_dict('records'), fig
@@ -144,6 +136,7 @@ def update_table(company):
     [Input('score-table', 'active_cell')]
 )
 def show_details(active_cell):
+    """Show detailed information about a selected score."""
     if active_cell:
         row = active_cell['row']
         category = df.iloc[row]['Category']
