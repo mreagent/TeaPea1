@@ -3,20 +3,11 @@ import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
-from flask import Flask, request, session, redirect, url_for
-from flask_session import Session  # ✅ Enables server-side session storage
+from flask import Flask, request, session, redirect, url_for, make_response
 
 # ✅ Initialize Flask Server
 server = Flask(__name__)
 server.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
-
-# ✅ Fix Flask-Session Issue
-server.config["SESSION_TYPE"] = "filesystem"
-server.config["SESSION_PERMANENT"] = False
-server.config["SESSION_USE_SIGNER"] = True
-server.config["SESSION_FILE_DIR"] = "/tmp/flask_session"  # ✅ Set session storage directory
-
-Session(server)  # ✅ Initialize Flask-Session
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  # Read password from Render
 
@@ -27,7 +18,6 @@ server = app.server  # ✅ Ensures Gunicorn recognizes the app
 # ✅ Debugging Log - Checking Render Environment
 print("🟢 App is starting...")
 print(f"🛠 SECRET_KEY Loaded: {bool(server.config['SECRET_KEY'])}")
-print(f"🛠 Session Config: {server.config['SESSION_TYPE']}")
 
 # ✅ Sample Data
 categories = ["CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence",
@@ -69,42 +59,45 @@ print("✅ Leadership Score Data Loaded")
 @server.route("/")
 def home():
     print("🛠 Loading Home Page")  # ✅ Debugging Log
-    if not session.get("logged_in"):
-        return """
-        <html>
-        <head><title>Login</title></head>
-        <body>
-        <h2>Login Required</h2>
-        <form action="/login" method="post">
-            <input type="password" name="password" placeholder="Enter Password">
-            <button type="submit">Submit</button>
-        </form>
-        </body>
-        </html>
-        """
-    return redirect("/dashboard")
+    if request.cookies.get("logged_in") == "true":
+        return redirect("/dashboard")
+
+    return """
+    <html>
+    <head><title>Login</title></head>
+    <body>
+    <h2>Login Required</h2>
+    <form action="/login" method="post">
+        <input type="password" name="password" placeholder="Enter Password">
+        <button type="submit">Submit</button>
+    </form>
+    </body>
+    </html>
+    """
 
 @server.route("/login", methods=["POST"])
 def login():
     print("🛠 Processing Login")  # ✅ Debugging Log
     password = request.form.get("password")
     if password == VALID_PASSWORD:
-        session["logged_in"] = True
+        response = make_response(redirect("/dashboard"))
+        response.set_cookie("logged_in", "true", max_age=3600)  # ✅ Store login in cookies
         print("🟢 Login Successful")  # ✅ Debugging Log
-        return redirect("/dashboard")
+        return response
     print("🔴 Incorrect Password")  # ✅ Debugging Log
     return redirect("/")
 
 @server.route("/logout")
 def logout():
-    session.pop("logged_in", None)
+    response = make_response(redirect("/"))
+    response.set_cookie("logged_in", "", expires=0)  # ✅ Clear login cookie
     print("🟢 Logged Out")  # ✅ Debugging Log
-    return redirect("/")
+    return response
 
 @server.route("/dashboard")
 def dashboard():
     print("🛠 Loading Dashboard")  # ✅ Debugging Log
-    if not session.get("logged_in"):
+    if request.cookies.get("logged_in") != "true":
         return redirect("/")
     return app.index()
 
