@@ -5,9 +5,9 @@ dash-table==5.0.0
 pandas==2.2.3
 plotly==6.0.1
 gunicorn==23.0.0
-flask==3.0.3
+flask==2.2.5  # ⬅️ Downgrade Flask to 2.2.5 for compatibility
 Flask-Session==0.4.0
-cachelib==0.13.0  # ✅ Required for Flask-Session
+cachelib==0.13.0
 Werkzeug<3.1
 importlib-metadata==8.6.1
 typing-extensions==4.12.2
