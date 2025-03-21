@@ -4,20 +4,20 @@ from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
 from flask import Flask, session, redirect, url_for
-from flask_session import Session  # ✅ Enables server-side session storage
+from flask_session import Session  
 
 # ✅ Flask Server Setup
 server = Flask(__name__)
 server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
 server.config["SESSION_TYPE"] = "filesystem"  
 server.config["SESSION_PERMANENT"] = False  
-Session(server)  # ✅ Initializes session management
+Session(server)  
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")
 
 # ✅ Attach Dash to Flask
 app = dash.Dash(__name__, server=server)
-server = app.server  # ✅ Ensures Gunicorn recognizes the app
+server = app.server  
 
 # ✅ Leadership Scorecard Data
 categories = [
@@ -74,49 +74,70 @@ def logout():
     session.pop("logged_in", None)
     return redirect(url_for("index"))
 
-# ✅ Layout with Login Screen by Default
+# ✅ Function to Serve Login Page
+def serve_login():
+    return html.Div([
+        html.H2("Login Required"),
+        dcc.Input(id="password", type="password", placeholder="Enter Password"),
+        html.Button("Submit", id="login-button"),
+        html.Div(id="login-output"),
+    ])
+
+# ✅ Function to Serve Dashboard Page
+def serve_dashboard():
+    return html.Div([
+        html.H1("Leadership Scorecard Dashboard"),
+        dcc.Dropdown(
+            id='company-dropdown',
+            options=[{'label': c, 'value': c} for c in companies],
+            value='Databricks',
+            clearable=False,
+        ),
+        dash_table.DataTable(
+            id='score-table',
+            columns=[
+                {"name": "Category", "id": "Category"},
+                {"name": "Score", "id": "Score"},
+                {"name": "Weight", "id": "Weight"},
+                {"name": "Weighted Score", "id": "Weighted Score"}
+            ],
+            style_table={'overflowX': 'auto'},
+            style_cell={'textAlign': 'left'}
+        ),
+        html.H3("Click a Score for More Details"),
+        dcc.Graph(id='score-chart'),
+        html.Div(id='score-details'),
+        html.Button("Logout", id="logout-button")
+    ])
+
+# ✅ Main Layout - Dynamically Shows Login or Dashboard
 app.layout = html.Div([
-    html.H2("Login Required"),
-    dcc.Input(id="password", type="password", placeholder="Enter Password"),
-    html.Button("Submit", id="login-button"),
-    html.Div(id="login-output"),
-    html.Div(id="dashboard-content")  # ✅ Placeholder for dashboard
+    html.Div(id="page-content")
 ])
 
-# ✅ Authentication Callback - Loads Dashboard After Login
+# ✅ Page Loader - Determines What to Display
 @app.callback(
-    Output("dashboard-content", "children"),
-    Input("login-button", "n_clicks"),
-    State("password", "value"),
+    Output("page-content", "children"),
+    [Input("login-button", "n_clicks"), Input("logout-button", "n_clicks")],
+    [State("password", "value")],
     prevent_initial_call=True
 )
-def authenticate(n_clicks, password):
-    if password == VALID_PASSWORD:
+def update_page(login_clicks, logout_clicks, password):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return serve_login()  
+
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if button_id == "login-button" and password == VALID_PASSWORD:
         session["logged_in"] = True
-        return html.Div([  # ✅ Show dashboard after login
-            html.H1("Leadership Scorecard Dashboard"),
-            dcc.Dropdown(
-                id='company-dropdown',
-                options=[{'label': c, 'value': c} for c in companies],
-                value='Databricks',
-                clearable=False,
-            ),
-            dash_table.DataTable(
-                id='score-table',
-                columns=[
-                    {"name": "Category", "id": "Category"},
-                    {"name": "Score", "id": "Score"},
-                    {"name": "Weight", "id": "Weight"},
-                    {"name": "Weighted Score", "id": "Weighted Score"}
-                ],
-                style_table={'overflowX': 'auto'},
-                style_cell={'textAlign': 'left'}
-            ),
-            html.H3("Click a Score for More Details"),
-            dcc.Graph(id='score-chart'),
-            html.Div(id='score-details')
-        ])
-    return "Incorrect Password. Try Again."
+        return serve_dashboard()
+    
+    if button_id == "logout-button":
+        session.pop("logged_in", None)
+        return serve_login()
+    
+    return serve_login()  # Default if something goes wrong
 
 # ✅ Update Table & Graph Callback
 @app.callback(
