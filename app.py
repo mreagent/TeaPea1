@@ -1,128 +1,167 @@
 import os
 import dash
-from dash import dcc, html, dash_table, Input, Output
-import pandas as pd
+from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
-from flask import Flask, request, Response
+import pandas as pd
+from flask import Flask, request, session, redirect, url_for
+from flask_session import Session  # ✅ Enables server-side session storage
 
-# 🚀 Flask Server for Authentication
+# Create a Flask WSGI-compatible server
 server = Flask(__name__)
+server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
 
-# ✅ Set Username and Password for Basic Authentication
-USERNAME = os.getenv("DASH_USERNAME", "admin")  # Default: admin
-PASSWORD = os.getenv("DASH_PASSWORD", "password")  # Default: password
+# ✅ Configure Flask-Session for server-side session storage
+server.config["SESSION_TYPE"] = "filesystem"  
+server.config["SESSION_PERMANENT"] = False  
+server.config["SESSION_USE_SIGNER"] = True  
 
-# ✅ Authentication Function
-def authenticate():
-    auth = request.authorization
-    if not auth or auth.username != USERNAME or auth.password != PASSWORD:
-        return Response(
-            "Login Required", 401,
-            {"WWW-Authenticate": 'Basic realm="Login Required"'}
-        )
+Session(server)  # ✅ Initializes Flask-Session
 
-@server.before_request
-def require_auth():
-    if request.path.startswith("/_dash"):  # Protects only Dash routes
-        auth_response = authenticate()
-        if auth_response:
-            return auth_response
-
-# ✅ Initialize Dash App
+# Attach Dash to the Flask server
 app = dash.Dash(__name__, server=server)
+server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
-# ✅ Sample Leadership Score Data
-df = pd.DataFrame({
-    "Category": [
-        "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires",
-        "Founder Presence", "Headcount Efficiency", "New Role Creation",
-        "Department Growth vs. Market Conditions", "Product & R&D Investment",
-        "Acquisitions & Partnerships", "Market Share Growth"
-    ],
-    "Score": [9, 8, 7, 10, 8, 9, 7, 9, 8, 9],
-    "Weight": [0.15, 0.1, 0.1, 0.05, 0.15, 0.1, 0.1, 0.1, 0.1, 0.05]
-})
+# Environment Variables for Authentication
+VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")
 
-df["Weighted Score"] = df["Score"] * df["Weight"]
+# Sample Data - Leadership Scorecard
+categories = [
+    "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence", 
+    "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions", 
+    "Product & R&D Investment", "Acquisitions & Partnerships", "Market Share Growth"
+]
 
-# ✅ Define Score Descriptions
-score_descriptions = {
-    "CEO Tenure & Impact": "Measures the influence of the CEO's tenure on company stability and growth.",
-    "Executive Turnover Rate": "Tracks the frequency of executive departures, indicating leadership stability.",
-    "Internal vs. External Hires": "Compares internal promotions to external hires, reflecting leadership development.",
-    "Founder Presence": "Assesses whether the founder remains actively involved in company leadership.",
-    "Headcount Efficiency": "Measures revenue per employee, assessing workforce efficiency.",
-    "New Role Creation": "Evaluates the rate of new roles being introduced in the organization.",
-    "Department Growth vs. Market Conditions": "Compares department expansion relative to industry growth trends.",
-    "Product & R&D Investment": "Analyzes spending on research and development for innovation and competitiveness.",
-    "Acquisitions & Partnerships": "Evaluates strategic acquisitions and partnerships contributing to market expansion.",
-    "Market Share Growth": "Measures the company’s ability to expand its market presence over time."
+companies = ["Databricks", "Snowflake", "Palantir"]
+
+scores = {
+    "Databricks": [9, 8, 7, 10, 8, 9, 7, 9, 8, 9],
+    "Snowflake": [7, 6, 7, 5, 9, 9, 8, 9, 9, 8],
+    "Palantir": [10, 9, 6, 10, 7, 6, 7, 8, 7, 7]
 }
 
-# ✅ Dash Layout
-app.layout = html.Div([
-    html.H1("Leadership Scorecard Dashboard"),
+weights = {
+    "CEO Tenure & Impact": 0.15, "Executive Turnover Rate": 0.10, "Internal vs. External Hires": 0.10,
+    "Founder Presence": 0.05, "Headcount Efficiency": 0.15, "New Role Creation": 0.10,
+    "Department Growth vs. Market Conditions": 0.10, "Product & R&D Investment": 0.10,
+    "Acquisitions & Partnerships": 0.10, "Market Share Growth": 0.05
+}
 
-    # Dropdown to Select a Company (Future Feature)
-    dcc.Dropdown(
-        id="company-dropdown",
-        options=[{"label": "Databricks", "value": "Databricks"}],
-        value="Databricks"
-    ),
+data = []
+for company, score_list in scores.items():
+    for i, category in enumerate(categories):
+        data.append({
+            "Company": company,
+            "Category": category,
+            "Score": score_list[i],
+            "Weight": weights[category],
+            "Weighted Score": round(score_list[i] * weights[category], 2)
+        })
 
-    # Leadership Score Table
-    dash_table.DataTable(
-        id="score-table",
-        columns=[
-            {"name": "Category", "id": "Category"},
-            {"name": "Score", "id": "Score"},
-            {"name": "Weight", "id": "Weight"},
-            {"name": "Weighted Score", "id": "Weighted Score"}
-        ],
-        data=df.to_dict("records"),
-        style_data_conditional=[
-            {"if": {"column_id": "Weighted Score", "filter_query": "{Weighted Score} < 1"},
-             "backgroundColor": "#FFDDDD", "color": "black"}
-        ]
-    ),
+df = pd.DataFrame(data)
 
-    html.H3("Click a Score for More Details"),
-    html.Div(id="score-details"),
+# Define score descriptions
+score_descriptions = {
+    "CEO Tenure & Impact": "Measures how a long-tenured CEO influences stability, strategy, and performance.",
+    "Executive Turnover Rate": "Evaluates the frequency of executive changes and its impact on continuity.",
+    "Internal vs. External Hires": "Analyzes whether leadership changes come from within or outside the company.",
+    "Founder Presence": "Assesses whether founders remain involved and their influence on company direction.",
+    "Headcount Efficiency": "Measures revenue per employee to determine efficient scaling.",
+    "New Role Creation": "Examines the introduction of new executive roles and strategic priorities.",
+    "Department Growth vs. Market Conditions": "Tracks hiring growth compared to market demand.",
+    "Product & R&D Investment": "Evaluates investment in innovation and new product development.",
+    "Acquisitions & Partnerships": "Analyzes strategic deals for expansion.",
+    "Market Share Growth": "Measures leadership impact on competitive positioning."
+}
 
-    # Score Bar Chart
-    dcc.Graph(id="score-chart"),
-])
+# Flask Logout Route
+@server.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("index"))  # ✅ Forces a full reload after logout
 
-# ✅ Callback: Show Score Details When Clicked
+# Layout Function with Authentication
+def serve_layout():
+    if session.get("logged_in"):  # ✅ Ensures session persists properly
+        return html.Div([
+            html.H1("Leadership Scorecard Dashboard"),
+            dcc.Dropdown(
+                id='company-dropdown',
+                options=[{'label': c, 'value': c} for c in companies],
+                value='Databricks',
+                clearable=False,
+            ),
+            dash_table.DataTable(
+                id='score-table',
+                columns=[
+                    {"name": "Category", "id": "Category"},
+                    {"name": "Score", "id": "Score"},
+                    {"name": "Weight", "id": "Weight"},
+                    {"name": "Weighted Score", "id": "Weighted Score"}
+                ],
+                style_table={'overflowX': 'auto'},
+                style_cell={'textAlign': 'left'}
+            ),
+            html.H3("Click a Score for More Details"),
+            dcc.Graph(id='score-chart'),
+            html.Div(id='score-details')
+        ])
+    
+    # If not logged in, show login form
+    return html.Div([
+        html.H2("Login Required"),
+        dcc.Input(id="password", type="password", placeholder="Enter Password"),
+        html.Button("Submit", id="login-button"),
+        html.Div(id="login-output")
+    ])
+
+app.layout = serve_layout  # ✅ Assign function reference, NOT execute it immediately
+
+# Authentication Callback
 @app.callback(
-    Output("score-details", "children"),
-    [Input("score-table", "active_cell")]
+    Output("login-output", "children"),
+    Input("login-button", "n_clicks"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def authenticate(n_clicks, password):
+    if password == VALID_PASSWORD:
+        session["logged_in"] = True
+        session.modified = True  # ✅ Ensures session persists
+        return dcc.Location(href="/", id="redirect")  # ✅ Redirect after login
+    return "Incorrect Password. Try Again."
+
+# Callbacks for Interactivity
+@app.callback(
+    [Output('score-table', 'data'),
+     Output('score-chart', 'figure')],
+    [Input('company-dropdown', 'value')]
+)
+def update_table(company):
+    filtered_df = df[df["Company"] == company]
+    fig = px.bar(filtered_df, x='Category', y='Score', title=f'{company} Leadership Scores')
+    return filtered_df.to_dict('records'), fig
+
+@app.callback(
+    Output('score-details', 'children'),
+    [Input('score-table', 'active_cell')]
 )
 def show_details(active_cell):
     if active_cell:
-        row = active_cell["row"]
-        category = df.iloc[row]["Category"]
-        score = df.iloc[row]["Score"]
-        weight = df.iloc[row]["Weight"]
-        description = score_descriptions.get(category, "No description available.")
-
+        row = active_cell['row']
+        category = df.iloc[row]['Category']
+        score = df.iloc[row]['Score']
+        weight = df.iloc[row]['Weight']
         return html.Div([
             html.H4(f"{category}"),
-            html.P(f"Definition: {description}"),
+            html.P(f"Definition: {score_descriptions[category]}"),
             html.P(f"Score Assigned: {score}"),
             html.P(f"Weight Applied: {weight * 100}%")
         ])
     return "Click on a score to view details."
 
-# ✅ Callback: Update Chart Based on Selected Company
-@app.callback(
-    Output("score-chart", "figure"),
-    [Input("company-dropdown", "value")]
-)
-def update_chart(selected_company):
-    fig = px.bar(df, x="Category", y="Score", title=f"{selected_company} Leadership Scores")
-    return fig
-
-# ✅ Run App
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    print("Starting Dash App...")  # Debugging line
+    try:
+        app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
+    except Exception as e:
+        print(f"Error starting app: {e}")  # Log errors
