@@ -6,7 +6,8 @@ pandas==2.2.3
 plotly==6.0.1
 gunicorn==23.0.0
 flask==3.0.3
-Flask-Session==0.4.0  # ✅ REQUIRED for session management
+Flask-Session==0.4.0
+cachelib==0.13.0  # ✅ Required for Flask-Session
 Werkzeug<3.1
 importlib-metadata==8.6.1
 typing-extensions==4.12.2
