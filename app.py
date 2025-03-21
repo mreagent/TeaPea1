@@ -6,19 +6,20 @@ import pandas as pd
 from flask import Flask, session, redirect, url_for
 from flask_session import Session  # ✅ Enables server-side session storage
 
-# Create Flask server
+# ✅ Flask Server Setup
 server = Flask(__name__)
 server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
-server.config["SESSION_TYPE"] = "filesystem"  # ✅ Prevents session errors
-Session(server)  # ✅ Initialize session management
+server.config["SESSION_TYPE"] = "filesystem"  
+server.config["SESSION_PERMANENT"] = False  
+Session(server)  # ✅ Initializes session management
 
 VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")
 
-# Attach Dash to Flask
+# ✅ Attach Dash to Flask
 app = dash.Dash(__name__, server=server)
 server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
-# Sample Data - Leadership Scorecard
+# ✅ Leadership Scorecard Data
 categories = [
     "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence",
     "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions",
@@ -40,7 +41,7 @@ weights = {
     "Acquisitions & Partnerships": 0.10, "Market Share Growth": 0.05
 }
 
-# Convert data into DataFrame
+# ✅ Convert Data to DataFrame
 data = []
 for company, score_list in scores.items():
     for i, category in enumerate(categories):
@@ -51,10 +52,9 @@ for company, score_list in scores.items():
             "Weight": weights[category],
             "Weighted Score": round(score_list[i] * weights[category], 2)
         })
-
 df = pd.DataFrame(data)
 
-# Define score descriptions
+# ✅ Score Descriptions
 score_descriptions = {
     "CEO Tenure & Impact": "Measures how a long-tenured CEO influences stability, strategy, and performance.",
     "Executive Turnover Rate": "Evaluates the frequency of executive changes and its impact on continuity.",
@@ -68,20 +68,24 @@ score_descriptions = {
     "Market Share Growth": "Measures leadership impact on competitive positioning."
 }
 
-# Flask Logout Route
+# ✅ Logout Route
 @server.route("/logout")
 def logout():
     session.pop("logged_in", None)
-    return redirect(url_for("index"))  # ✅ Ensures a full reload after logout
+    return redirect(url_for("index"))
 
-# Default Layout - Login Page
+# ✅ Layout with Login Screen by Default
 app.layout = html.Div([
-    html.Div(id="dynamic-layout")  # ✅ Placeholder for login/dashboard content
+    html.H2("Login Required"),
+    dcc.Input(id="password", type="password", placeholder="Enter Password"),
+    html.Button("Submit", id="login-button"),
+    html.Div(id="login-output"),
+    html.Div(id="dashboard-content")  # ✅ Placeholder for dashboard
 ])
 
-# Callback to update layout dynamically
+# ✅ Authentication Callback - Loads Dashboard After Login
 @app.callback(
-    Output("dynamic-layout", "children"),
+    Output("dashboard-content", "children"),
     Input("login-button", "n_clicks"),
     State("password", "value"),
     prevent_initial_call=True
@@ -114,22 +118,7 @@ def authenticate(n_clicks, password):
         ])
     return "Incorrect Password. Try Again."
 
-# Authentication Login UI
-@app.callback(
-    Output("dynamic-layout", "children"),
-    Input("login-button", "n_clicks"),
-    State("password", "value"),
-    prevent_initial_call=True
-)
-def serve_login(n_clicks, password):
-    return html.Div([
-        html.H2("Login Required"),
-        dcc.Input(id="password", type="password", placeholder="Enter Password"),
-        html.Button("Submit", id="login-button"),
-        html.Div(id="login-output")
-    ])
-
-# Callbacks for Interactivity
+# ✅ Update Table & Graph Callback
 @app.callback(
     [Output('score-table', 'data'),
      Output('score-chart', 'figure')],
@@ -140,6 +129,7 @@ def update_table(company):
     fig = px.bar(filtered_df, x='Category', y='Score', title=f'{company} Leadership Scores')
     return filtered_df.to_dict('records'), fig
 
+# ✅ Show Score Details Callback
 @app.callback(
     Output('score-details', 'children'),
     [Input('score-table', 'active_cell')]
@@ -158,10 +148,10 @@ def show_details(active_cell):
         ])
     return "Click on a score to view details."
 
-# Run the app
+# ✅ Run App with Debugging Logs
 if __name__ == "__main__":
-    print("Starting Dash App...")  # ✅ Debugging
+    print("✅ Starting Dash App...")
     try:
-        app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
+        app.run_server(host="0.0.0.0", port=8080, debug=True)
     except Exception as e:
-        print(f"Error starting app: {e}")  # ✅ Logs errors
+        print(f"❌ Error starting app: {e}") 
