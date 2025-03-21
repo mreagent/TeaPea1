@@ -3,26 +3,25 @@ import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import plotly.express as px
 import pandas as pd
-from flask import Flask, request, session, redirect, url_for
+from flask import Flask, session, redirect, url_for
 from flask_session import Session  # ✅ Enables server-side session storage
 
 # Create Flask server
 server = Flask(__name__)
-server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Secure Key
-server.config["SESSION_TYPE"] = "filesystem"  # Store session data on the server
-Session(server)  # Initialize session handling
+server.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
+server.config["SESSION_TYPE"] = "filesystem"  # ✅ Prevents session errors
+Session(server)  # ✅ Initialize session management
 
-# Retrieve password from Render environment variable
-VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")  
+VALID_PASSWORD = os.environ.get("PASSWORD", "defaultpassword")
 
 # Attach Dash to Flask
 app = dash.Dash(__name__, server=server)
 server = app.server  # ✅ Ensures Gunicorn recognizes the app
 
-# Leadership Scorecard Data
+# Sample Data - Leadership Scorecard
 categories = [
-    "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence", 
-    "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions", 
+    "CEO Tenure & Impact", "Executive Turnover Rate", "Internal vs. External Hires", "Founder Presence",
+    "Headcount Efficiency", "New Role Creation", "Department Growth vs. Market Conditions",
     "Product & R&D Investment", "Acquisitions & Partnerships", "Market Share Growth"
 ]
 
@@ -41,6 +40,7 @@ weights = {
     "Acquisitions & Partnerships": 0.10, "Market Share Growth": 0.05
 }
 
+# Convert data into DataFrame
 data = []
 for company, score_list in scores.items():
     for i, category in enumerate(categories):
@@ -68,50 +68,20 @@ score_descriptions = {
     "Market Share Growth": "Measures leadership impact on competitive positioning."
 }
 
-# Logout Route
+# Flask Logout Route
 @server.route("/logout")
 def logout():
     session.pop("logged_in", None)
-    return redirect(url_for("index"))  # ✅ Redirects to login
+    return redirect(url_for("index"))  # ✅ Ensures a full reload after logout
 
-# Layout Function with Authentication
-def serve_layout():
-    if "logged_in" not in session:
-        return html.Div([
-            html.H2("Login Required"),
-            dcc.Input(id="password", type="password", placeholder="Enter Password"),
-            html.Button("Submit", id="login-button"),
-            html.Div(id="login-output")
-        ])
-    return html.Div([
-        html.H1("Leadership Scorecard Dashboard"),
-        dcc.Dropdown(
-            id='company-dropdown',
-            options=[{'label': c, 'value': c} for c in companies],
-            value='Databricks',
-            clearable=False,
-        ),
-        dash_table.DataTable(
-            id='score-table',
-            columns=[
-                {"name": "Category", "id": "Category"},
-                {"name": "Score", "id": "Score"},
-                {"name": "Weight", "id": "Weight"},
-                {"name": "Weighted Score", "id": "Weighted Score"}
-            ],
-            style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left'}
-        ),
-        html.H3("Click a Score for More Details"),
-        dcc.Graph(id='score-chart'),
-        html.Div(id='score-details')
-    ])
+# Default Layout - Login Page
+app.layout = html.Div([
+    html.Div(id="dynamic-layout")  # ✅ Placeholder for login/dashboard content
+])
 
-app.layout = serve_layout  # ✅ Correct reference for authentication
-
-# Authentication Callback
+# Callback to update layout dynamically
 @app.callback(
-    Output("login-output", "children"),
+    Output("dynamic-layout", "children"),
     Input("login-button", "n_clicks"),
     State("password", "value"),
     prevent_initial_call=True
@@ -119,8 +89,45 @@ app.layout = serve_layout  # ✅ Correct reference for authentication
 def authenticate(n_clicks, password):
     if password == VALID_PASSWORD:
         session["logged_in"] = True
-        return dcc.Location(href="/", id="redirect")  # ✅ Redirect to dashboard
+        return html.Div([  # ✅ Show dashboard after login
+            html.H1("Leadership Scorecard Dashboard"),
+            dcc.Dropdown(
+                id='company-dropdown',
+                options=[{'label': c, 'value': c} for c in companies],
+                value='Databricks',
+                clearable=False,
+            ),
+            dash_table.DataTable(
+                id='score-table',
+                columns=[
+                    {"name": "Category", "id": "Category"},
+                    {"name": "Score", "id": "Score"},
+                    {"name": "Weight", "id": "Weight"},
+                    {"name": "Weighted Score", "id": "Weighted Score"}
+                ],
+                style_table={'overflowX': 'auto'},
+                style_cell={'textAlign': 'left'}
+            ),
+            html.H3("Click a Score for More Details"),
+            dcc.Graph(id='score-chart'),
+            html.Div(id='score-details')
+        ])
     return "Incorrect Password. Try Again."
+
+# Authentication Login UI
+@app.callback(
+    Output("dynamic-layout", "children"),
+    Input("login-button", "n_clicks"),
+    State("password", "value"),
+    prevent_initial_call=True
+)
+def serve_login(n_clicks, password):
+    return html.Div([
+        html.H2("Login Required"),
+        dcc.Input(id="password", type="password", placeholder="Enter Password"),
+        html.Button("Submit", id="login-button"),
+        html.Div(id="login-output")
+    ])
 
 # Callbacks for Interactivity
 @app.callback(
@@ -151,9 +158,10 @@ def show_details(active_cell):
         ])
     return "Click on a score to view details."
 
+# Run the app
 if __name__ == "__main__":
-    print("Starting Dash App...")  # Debugging line
+    print("Starting Dash App...")  # ✅ Debugging
     try:
         app.run_server(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
     except Exception as e:
-        print(f"Error starting app: {e}")  # Log errors
+        print(f"Error starting app: {e}")  # ✅ Logs errors
